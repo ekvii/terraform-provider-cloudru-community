@@ -1,0 +1,816 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+openapi: 3.0.3
+info:
+  title: Evolution VPC Public API
+  version: 0.0.1
+  description: '[Документация сервиса Evolution VPC](https://cloud.ru/docs/evolution-vpc/ug/index.html)'
+  contact:
+    email: support@cloud.ru
+servers:
+- url: https://vpc.api.cloud.ru
+paths:
+  /v1/vpcs:
+    get:
+      tags:
+        - VpcService
+      description: Возвращает список VPC, соответствующих указанным фильтрам.
+      operationId: VpcService_List
+      parameters:
+        - name: projectId
+          in: query
+          description: Идентификатор проекта для получения списка VPC.
+          schema:
+            type: string
+        - name: pageSize
+          in: query
+          description: Максимальное количество элементов на странице.
+          schema:
+            type: integer
+            format: uint32
+        - name: pageToken
+          in: query
+          description: Токен для пагинации (получения следующей страницы).
+          schema:
+            type: string
+        - name: filter
+          in: query
+          description: >-
+            Поле filter - это [cel-выражениe](https://github.com/google/cel-spec/blob/master/doc/langdef.md), состоящее из фильтрующих выражений, каждое выражение соединяется оператором && (логическое и).
+             Поддерживаемые поля:
+             1. ids []string опциональное. Поддерживаемые операторы: 'in'.
+             Пример выражения: ids in ['5e45ad32-7fca-4dd8-bab6-f334c9f8e553', "4507e4d1-0e92-438b-9c2e-2a5b91f2f755"].
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListVPCResponse'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      tags:
+        - VpcService
+      description: Создает новую VPC на основе переданного запроса.
+      operationId: VpcService_Create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVPCRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /v1/vpcs/operations/{operationId}:
+    get:
+      tags:
+        - OperationService
+      description: Возвращает операцию по идентификатору.
+      operationId: OperationService_Get
+      parameters:
+        - name: operationId
+          in: path
+          description: Идентификатор операции.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /v1/vpcs/{vpcId}:
+    get:
+      tags:
+        - VpcService
+      description: Возвращает сведения о VPC по указанному идентификатору.
+      operationId: VpcService_Get
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор запрашиваемой VPC.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vpc'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    put:
+      tags:
+        - VpcService
+      description: Обновляет существующую VPC новыми данными, указанными в запросе.
+      operationId: VpcService_Update
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор обновляемой VPC.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVPCRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      tags:
+        - VpcService
+      description: Удаляет существующую VPC по указанному идентификатору.
+      operationId: VpcService_Delete
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор удаляемой VPC.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /v1/vpcs/{vpcId}/routes/static:
+    get:
+      tags:
+        - VpcRoutingService
+      description: Возвращает список статических маршрутов.
+      operationId: VpcRoutingService_List
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC для получения списка маршрутов.
+          required: true
+          schema:
+            type: string
+        - name: pageSize
+          in: query
+          description: Максимальное количество элементов на странице.
+          schema:
+            type: integer
+            format: uint32
+        - name: pageToken
+          in: query
+          description: Токен для пагинации (получения следующей страницы).
+          schema:
+            type: string
+        - name: filter
+          in: query
+          description: >-
+            Поле filter - это [cel-выражениe](https://github.com/google/cel-spec/blob/master/doc/langdef.md), состоящее из фильтрующих выражений, каждое выражение соединяется оператором && (логическое и).
+             Поддерживаемые поля:
+             1. ids []string опциональное. Поддерживаемые операторы: 'in'.
+             Пример выражения: ids in ['5e45ad32-7fca-4dd8-bab6-f334c9f8e553', "4507e4d1-0e92-438b-9c2e-2a5b91f2f755"].
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListStaticRoutesResponse'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      tags:
+        - VpcRoutingService
+      description: Создает статический маршрут.
+      operationId: VpcRoutingService_Create
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaticRouteRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /v1/vpcs/{vpcId}/routes/static/{staticRouteId}:
+    get:
+      tags:
+        - VpcRoutingService
+      description: Возвращает статический маршрут.
+      operationId: VpcRoutingService_Get
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC.
+          required: true
+          schema:
+            type: string
+        - name: staticRouteId
+          in: path
+          description: Идентификатор маршрута.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaticRoute'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    put:
+      tags:
+        - VpcRoutingService
+      description: Обновляет статический маршрут.
+      operationId: VpcRoutingService_Update
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC.
+          required: true
+          schema:
+            type: string
+        - name: staticRouteId
+          in: path
+          description: Идентификатор маршрута.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStaticRouteRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      tags:
+        - VpcRoutingService
+      description: Удаляет статический маршрут.
+      operationId: VpcRoutingService_Delete
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC.
+          required: true
+          schema:
+            type: string
+        - name: staticRouteId
+          in: path
+          description: Идентификатор маршрута.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /v1/vpcs/{vpcId}/routes/static/{staticRouteId}/operations:
+    get:
+      tags:
+        - VpcRoutingService
+      description: Возвращает список операций для статического маршрута.
+      operationId: VpcRoutingService_ListOperations
+      parameters:
+        - name: vpcId
+          in: path
+          description: Идентификатор VPC.
+          required: true
+          schema:
+            type: string
+        - name: staticRouteId
+          in: path
+          description: Идентификатор маршрута.
+          required: true
+          schema:
+            type: string
+        - name: pageSize
+          in: query
+          description: Размер страницы.
+          schema:
+            type: string
+        - name: pageToken
+          in: query
+          description: Токен страницы.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListStaticRoutesOperationResponse'
+        default:
+          description: Default error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+components:
+  schemas:
+    CreateStaticRouteRequest:
+      required:
+        - vpcId
+        - projectId
+        - subnet
+        - nextHop
+      type: object
+      properties:
+        vpcId:
+          type: string
+          description: Идентификатор VPC.
+        projectId:
+          type: string
+          description: Идентификатор проекта.
+        subnet:
+          type: string
+          description: Адрес назначения.
+        nextHop:
+          allOf:
+            - $ref: '#/components/schemas/RouteNextHop'
+          description: Next Hop маршрута.
+        description:
+          type: string
+          description: Описание маршрута.
+      description: Запрос на создание статического маршрута.
+    CreateVPCRequest:
+      required:
+        - projectId
+        - name
+      type: object
+      properties:
+        projectId:
+          type: string
+          description: ID проекта, в котором создается VPC.
+        name:
+          type: string
+          description: Название создаваемой VPC.
+        description:
+          type: string
+          description: Описание создаваемой VPC.
+    GoogleProtobufAny:
+      type: object
+      properties:
+        '@type':
+          type: string
+          description: The type of the serialized message.
+      additionalProperties: true
+      description: >-
+        Contains an arbitrary serialized message along with a @type that
+        describes the type of the serialized message.
+    Interface:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          type: string
+          description: Идентификатор интерфейса.
+      description: Сетевой интерфейс.
+    ListStaticRoutesOperationResponse:
+      type: object
+      properties:
+        operations:
+          readOnly: true
+          type: array
+          items:
+            $ref: '#/components/schemas/Operation'
+          description: Список операций.
+        nextPageToken:
+          readOnly: true
+          type: string
+          description: Токен следующей страницы.
+        totalCount:
+          readOnly: true
+          type: integer
+          description: Общее количество операций.
+          format: uint32
+      description: Ответ со списком операций для статического маршрута.
+    ListStaticRoutesResponse:
+      type: object
+      properties:
+        routes:
+          readOnly: true
+          type: array
+          items:
+            $ref: '#/components/schemas/StaticRoute'
+          description: Список маршрутов.
+        nextPageToken:
+          readOnly: true
+          type: string
+          description: Токен следующей страницы.
+        totalCount:
+          readOnly: true
+          type: integer
+          description: Общее количество маршрутов.
+          format: uint32
+      description: Ответ со списком статических маршрутов.
+    ListVPCResponse:
+      type: object
+      properties:
+        vpcs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vpc'
+          description: Список найденных VPC.
+        nextPageToken:
+          type: string
+          description: Токен для получения следующей страницы результатов.
+    MagicRouter:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          type: string
+          description: Идентификатор Magic Router.
+      description: Magic Router.
+    NextHopMagicRouter:
+      required:
+        - magicRouter
+        - azName
+      type: object
+      properties:
+        magicRouter:
+          allOf:
+            - $ref: '#/components/schemas/MagicRouter'
+          description: Magic Router.
+        azName:
+          type: string
+          description: Зона доступности.
+      description: Next Hop маршрута — Magic Router.
+    NextHopVirtualMachine:
+      required:
+        - virtualMachine
+        - interface
+      type: object
+      properties:
+        virtualMachine:
+          allOf:
+            - $ref: '#/components/schemas/VirtualMachine'
+          description: Виртуальная машина.
+        interface:
+          allOf:
+            - $ref: '#/components/schemas/Interface'
+          description: Сетевой интерфейс.
+      description: Next Hop маршрута — интерфейс виртуальной машины.
+    Operation:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          type: string
+          description: Идентификатор операции.
+        resourceName:
+          readOnly: true
+          type: string
+          description: |-
+            Информация о ресурсе, над которым производится операция.
+             Формат: urn:cloud:SERVICE:ZONE_OPT:PROJECT_OPT:RESOURCE_TYPE_OPT.
+        resourceId:
+          readOnly: true
+          type: string
+          description: Уникальный идентификатор ресурса.
+        createdAt:
+          readOnly: true
+          type: string
+          description: Время создания операции.
+          format: date-time
+        updatedAt:
+          readOnly: true
+          type: string
+          description: Время последнего изменения операции.
+          format: date-time
+        done:
+          readOnly: true
+          type: boolean
+          description: Флаг завершенности операции.
+        description:
+          readOnly: true
+          type: string
+          description: Описание операции (0-255 символов).
+        error:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/Status'
+          description: Описание ошибки (заполняется только при done=true).
+      description: Описание операции.
+    RouteNextHop:
+      type: object
+      properties:
+        magicRouter:
+          allOf:
+            - $ref: '#/components/schemas/NextHopMagicRouter'
+          description: Next Hop маршрута — Magic Router.
+        virtualMachine:
+          allOf:
+            - $ref: '#/components/schemas/NextHopVirtualMachine'
+          description: Next Hop маршрута — интерфейс виртуальной машины.
+      description: Next Hop маршрута.
+    StaticRoute:
+      required:
+        - vpcId
+        - projectId
+        - nextHop
+        - subnet
+      type: object
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор маршрута.
+        vpcId:
+          type: string
+          description: Идентификатор VPC, в которой создан маршрут.
+        projectId:
+          type: string
+          description: Идентификатор проекта.
+        nextHop:
+          allOf:
+            - $ref: '#/components/schemas/RouteNextHop'
+          description: Next Hop маршрута.
+        nextHopType:
+          readOnly: true
+          enum:
+            - ROUTE_NEXT_HOP_TYPE_UNSPECIFIED
+            - ROUTE_NEXT_HOP_TYPE_VPC
+            - ROUTE_NEXT_HOP_TYPE_MAGIC_ROUTER
+            - ROUTE_NEXT_HOP_TYPE_VIRTUAL_MACHINE
+          type: string
+          description: Тип Next Hop.
+          format: enum
+        subnet:
+          type: string
+          description: Адрес назначения.
+        description:
+          type: string
+          description: Описание маршрута.
+        status:
+          readOnly: true
+          enum:
+            - ROUTE_STATUS_UNSPECIFIED
+            - ROUTE_STATUS_NEW
+            - ROUTE_STATUS_CREATING
+            - ROUTE_STATUS_CREATED
+            - ROUTE_STATUS_FAILED_CREATE
+            - ROUTE_STATUS_DELETING
+            - ROUTE_STATUS_DELETED
+            - ROUTE_STATUS_FAILED_DELETE
+          type: string
+          description: Текущий статус маршрута (только для чтения).
+          format: enum
+        type:
+          readOnly: true
+          enum:
+            - ROUTE_TYPE_UNSPECIFIED
+            - ROUTE_TYPE_CLIENT
+            - ROUTE_TYPE_SERVICE
+            - ROUTE_TYPE_ADMIN
+          type: string
+          description: Тип маршрута (только для чтения).
+          format: enum
+        createdAt:
+          readOnly: true
+          type: string
+          description: Время создания маршрута (только для чтения).
+          format: date-time
+        updatedAt:
+          readOnly: true
+          type: string
+          description: Время последнего обновления маршрута (только для чтения).
+          format: date-time
+      description: Статический маршрут в VPC.
+    Status:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: >-
+            The status code, which should be an enum value of
+            [google.rpc.Code][google.rpc.Code].
+          format: int32
+        message:
+          type: string
+          description: >-
+            A developer-facing error message, which should be in English. Any
+            user-facing error message should be localized and sent in the
+            [google.rpc.Status.details][google.rpc.Status.details] field, or
+            localized by the client.
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoogleProtobufAny'
+          description: >-
+            A list of messages that carry the error details.  There is a common
+            set of message types for APIs to use.
+      description: >-
+        The `Status` type defines a logical error model that is suitable for
+        different programming environments, including REST APIs and RPC APIs. It
+        is used by [gRPC](https://github.com/grpc). Each `Status` message
+        contains three pieces of data: error code, error message, and error
+        details. You can find out more about this error model and how to work
+        with it in the [API Design
+        Guide](https://cloud.google.com/apis/design/errors).
+    UpdateStaticRouteRequest:
+      required:
+        - vpcId
+        - staticRouteId
+      type: object
+      properties:
+        vpcId:
+          type: string
+          description: Идентификатор VPC.
+        staticRouteId:
+          type: string
+          description: Идентификатор маршрута.
+        description:
+          type: string
+          description: Новое описание маршрута.
+      description: Запрос на обновление статического маршрута.
+    UpdateVPCRequest:
+      required:
+        - vpcId
+      type: object
+      properties:
+        vpcId:
+          type: string
+          description: Идентификатор обновляемой VPC.
+        name:
+          type: string
+          description: Новое название VPC.
+        description:
+          type: string
+          description: Новое описание VPC.
+    VirtualMachine:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          type: string
+          description: Идентификатор виртуальной машины.
+      description: Виртуальная машина.
+    Vpc:
+      required:
+        - name
+        - projectId
+      type: object
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор VPC.
+        name:
+          type: string
+          description: Название VPC.
+        projectId:
+          type: string
+          description: Идентификатор проекта, к которому относится VPC.
+        customerId:
+          readOnly: true
+          type: string
+          description: Идентификатор клиента (владельца VPC).
+        createdAt:
+          readOnly: true
+          type: string
+          description: Дата и время создания VPC.
+          format: date-time
+        default:
+          readOnly: true
+          type: boolean
+          description: Флаг, указывающий является ли VPC дефолтной.
+        productInstanceId:
+          readOnly: true
+          type: string
+          description: Идентификатор экземпляра продукта.
+        type:
+          readOnly: true
+          enum:
+            - VPC_TYPE_UNSPECIFIED
+            - VPC_TYPE_CLIENT
+            - VPC_TYPE_SERVICE
+          type: string
+          description: Тип VPC (клиентский/сервисный).
+          format: enum
+        description:
+          type: string
+          description: Описание VPC.
+        updatedAt:
+          readOnly: true
+          type: string
+          description: Дата и время последнего обновления VPC.
+          format: date-time
+  securitySchemes:
+    ApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - ApiKey: []
+tags:
+  - name: OperationService
+    description: Сервис для работы с операциями.
+  - name: VpcRoutingService
+    description: Сервис для работы со статическими маршрутами в VPC.
+  - name: VpcService
+    description: Сервис для работы с VPC.
