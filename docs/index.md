@@ -12,8 +12,6 @@ description: |-
 ## Example Usage
 
 ```terraform
-# Copyright (c) HashiCorp, Inc.
-
 provider "cloudru-community" {
   project_id  = var.project_id
   auth_key_id = var.auth_key_id
