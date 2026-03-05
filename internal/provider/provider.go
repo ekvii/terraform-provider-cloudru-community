@@ -22,11 +22,12 @@ type CloudRuCommunityProvider struct {
 }
 
 type CloudRuCommunityProviderModel struct {
-	ProjectID   types.String `tfsdk:"project_id"`
-	AuthKeyID   types.String `tfsdk:"auth_key_id"`
-	AuthSecret  types.String `tfsdk:"auth_secret"`
-	VpcEndpoint types.String `tfsdk:"vpc_endpoint"`
-	DnsEndpoint types.String `tfsdk:"dns_endpoint"`
+	ProjectID       types.String `tfsdk:"project_id"`
+	AuthKeyID       types.String `tfsdk:"auth_key_id"`
+	AuthSecret      types.String `tfsdk:"auth_secret"`
+	VpcEndpoint     types.String `tfsdk:"vpc_endpoint"`
+	DnsEndpoint     types.String `tfsdk:"dns_endpoint"`
+	ComputeEndpoint types.String `tfsdk:"compute_endpoint"`
 }
 
 func (p *CloudRuCommunityProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -58,6 +59,10 @@ func (p *CloudRuCommunityProvider) Schema(ctx context.Context, req provider.Sche
 				MarkdownDescription: "Cloud.ru DNS API endpoint",
 				Optional:            true,
 			},
+			"compute_endpoint": schema.StringAttribute{
+				MarkdownDescription: "Cloud.ru Compute API endpoint (hosts subnet, VM resources)",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -80,6 +85,11 @@ func (p *CloudRuCommunityProvider) Configure(ctx context.Context, req provider.C
 		dnsEndpoint = "https://dns.api.cloud.ru"
 	}
 
+	computeEndpoint := data.ComputeEndpoint.ValueString()
+	if computeEndpoint == "" {
+		computeEndpoint = "https://compute.api.cloud.ru"
+	}
+
 	c, err := client.NewCloudRuHttpClient(
 		ctx,
 		data.AuthKeyID.ValueString(),
@@ -87,6 +97,7 @@ func (p *CloudRuCommunityProvider) Configure(ctx context.Context, req provider.C
 		data.ProjectID.ValueString(),
 		vpcEndpoint,
 		dnsEndpoint,
+		computeEndpoint,
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Authentication Error", err.Error())
@@ -101,6 +112,7 @@ func (p *CloudRuCommunityProvider) Resources(ctx context.Context) []func() resou
 	return []func() resource.Resource{
 		NewCloudRuVpcResource,
 		NewDnsServerResource,
+		NewSubnetResource,
 	}
 }
 

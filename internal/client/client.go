@@ -21,6 +21,12 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 )
 
+// IsNotFound reports whether err originates from an HTTP 404 response as
+// surfaced by the client methods.
+func IsNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), fmt.Sprintf("unexpected HTTP status %d", http.StatusNotFound))
+}
+
 // CloudRuHttpClient is the shared HTTP client for all provider resources and
 // data sources. Create one via [NewCloudRuHttpClient] and store it in the
 // provider's configure response so every resource/datasource can retrieve it
@@ -38,16 +44,20 @@ type CloudRuHttpClient struct {
 
 	// DnsEndpoint is the base URL for the DNS API (e.g. "https://dns.api.cloud.ru").
 	DnsEndpoint string
+
+	// ComputeEndpoint is the base URL for the Compute API (e.g. "https://compute.api.cloud.ru").
+	// It hosts the subnet, VM, and other compute resources.
+	ComputeEndpoint string
 }
 
 // NewCloudRuHttpClient builds a fully initialised [CloudRuHttpClient].
 // It constructs an internal retryable HTTP client, fetches a bearer token via
 // the OAuth2 client_credentials grant, and stores all configuration so callers
 // never need to handle auth or endpoint details directly.
-func NewCloudRuHttpClient(ctx context.Context, keyID, secret, projectID, vpcEndpoint, dnsEndpoint string) (*CloudRuHttpClient, error) {
+func NewCloudRuHttpClient(ctx context.Context, keyID, secret, projectID, vpcEndpoint, dnsEndpoint, computeEndpoint string) (*CloudRuHttpClient, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = 3
-	retryClient.HTTPClient.Timeout = 3 * time.Second
+	retryClient.HTTPClient.Timeout = 3 * time.Minute
 	retryClient.Logger = nil
 	httpClient := retryClient.StandardClient()
 
@@ -57,11 +67,12 @@ func NewCloudRuHttpClient(ctx context.Context, keyID, secret, projectID, vpcEndp
 	}
 
 	return &CloudRuHttpClient{
-		httpClient:  httpClient,
-		token:       token,
-		ProjectID:   projectID,
-		VpcEndpoint: vpcEndpoint,
-		DnsEndpoint: dnsEndpoint,
+		httpClient:      httpClient,
+		token:           token,
+		ProjectID:       projectID,
+		VpcEndpoint:     vpcEndpoint,
+		DnsEndpoint:     dnsEndpoint,
+		ComputeEndpoint: computeEndpoint,
 	}, nil
 }
 
@@ -107,9 +118,10 @@ type apiError struct {
 }
 
 // execute performs an HTTP request with the Authorization header set, asserts
-// HTTP 200, reads the full body, checks for an "error" field in the JSON
-// response, and — when dest is non-nil — decodes the body into dest.
-func (c *CloudRuHttpClient) execute(req *http.Request, dest interface{}) error {
+// the expected HTTP status code, reads the full body, checks for an "error"
+// field in the JSON response, and — when dest is non-nil — decodes the body
+// into dest.
+func (c *CloudRuHttpClient) execute(req *http.Request, expectedStatus int, dest interface{}) error {
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.httpClient.Do(req)
@@ -123,7 +135,7 @@ func (c *CloudRuHttpClient) execute(req *http.Request, dest interface{}) error {
 		return fmt.Errorf("read response body: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != expectedStatus {
 		// Try to surface the API error message if present.
 		var apiErr apiError
 		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != "" {
@@ -132,7 +144,7 @@ func (c *CloudRuHttpClient) execute(req *http.Request, dest interface{}) error {
 		return fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Even on HTTP 200 some APIs embed an error field.
+	// Even on a success status some APIs embed an error field.
 	var apiErr apiError
 	if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != "" {
 		return fmt.Errorf("API error: %s", apiErr.Error)
@@ -153,13 +165,23 @@ func (c *CloudRuHttpClient) GetJSON(ctx context.Context, url string, dest interf
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
-	return c.execute(req, dest)
+	return c.execute(req, http.StatusOK, dest)
 }
 
 // PostJSON marshals body as JSON, performs a POST request, asserts HTTP 200,
 // checks for an API error field, and JSON-decodes the response into dest.
 // Pass nil for dest to discard the response body.
 func (c *CloudRuHttpClient) PostJSON(ctx context.Context, url string, body interface{}, dest interface{}) error {
+	return c.postJSON(ctx, url, body, http.StatusOK, dest)
+}
+
+// PostJSONCreated is like [PostJSON] but asserts HTTP 201 instead of 200.
+// Use this for endpoints that return 201 Created on success.
+func (c *CloudRuHttpClient) PostJSONCreated(ctx context.Context, url string, body interface{}, dest interface{}) error {
+	return c.postJSON(ctx, url, body, http.StatusCreated, dest)
+}
+
+func (c *CloudRuHttpClient) postJSON(ctx context.Context, url string, body interface{}, expectedStatus int, dest interface{}) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal request body: %w", err)
@@ -171,7 +193,7 @@ func (c *CloudRuHttpClient) PostJSON(ctx context.Context, url string, body inter
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	return c.execute(req, dest)
+	return c.execute(req, expectedStatus, dest)
 }
 
 // PutJSON marshals body as JSON, performs a PUT request, asserts HTTP 200,
@@ -189,7 +211,7 @@ func (c *CloudRuHttpClient) PutJSON(ctx context.Context, url string, body interf
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	return c.execute(req, dest)
+	return c.execute(req, http.StatusOK, dest)
 }
 
 // Delete performs a DELETE request, asserts HTTP 200, and checks for an API
@@ -199,7 +221,17 @@ func (c *CloudRuHttpClient) Delete(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
-	return c.execute(req, nil)
+	return c.execute(req, http.StatusOK, nil)
+}
+
+// DeleteNoContent performs a DELETE request and asserts HTTP 204 (no body).
+// Use this for endpoints that return 204 No Content on successful deletion.
+func (c *CloudRuHttpClient) DeleteNoContent(ctx context.Context, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	return c.execute(req, http.StatusNoContent, nil)
 }
 
 // PagedResponse is the minimal interface a paginated list response must

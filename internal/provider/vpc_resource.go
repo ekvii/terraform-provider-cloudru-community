@@ -134,7 +134,7 @@ func (r *CloudRuVpcResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	err := r.client.GetJSON(ctx, getURL, &vpcResp)
 	if err != nil {
-		if isNotFound(err) {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

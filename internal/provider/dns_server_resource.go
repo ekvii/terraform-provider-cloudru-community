@@ -123,7 +123,7 @@ func (r *DnsServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	err := r.client.GetJSON(ctx, url, &server)
 	if err != nil {
-		if isNotFound(err) {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
