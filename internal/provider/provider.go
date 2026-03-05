@@ -2,17 +2,14 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-cloudru-community/internal/client"
 )
 
 var _ provider.Provider = &CloudRuCommunityProvider{}
@@ -24,13 +21,6 @@ type CloudRuCommunityProvider struct {
 	version string
 }
 
-type CloudRuProviderClient struct {
-	HTTPClient  *http.Client
-	Token       string
-	ProjectID   string
-	VpcEndpoint string
-	DnsEndpoint string
-}
 type CloudRuCommunityProviderModel struct {
 	ProjectID   types.String `tfsdk:"project_id"`
 	AuthKeyID   types.String `tfsdk:"auth_key_id"`
@@ -76,44 +66,7 @@ func (p *CloudRuCommunityProvider) Configure(ctx context.Context, req provider.C
 	var data CloudRuCommunityProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("client_id", data.AuthKeyID.ValueString())
-	form.Set("client_secret", data.AuthSecret.ValueString())
-
-	tokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://id.cloud.ru/auth/system/openid/token",
-		strings.NewReader(form.Encode()),
-	)
-	if err != nil {
-		resp.Diagnostics.AddError("Token Request Error", err.Error())
-		return
-	}
-	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	httpClient := http.DefaultClient
-	tokenResp, err := httpClient.Do(tokenReq)
-	if err != nil {
-		resp.Diagnostics.AddError("Token HTTP Error", err.Error())
-		return
-	}
-	defer tokenResp.Body.Close()
-
-	if tokenResp.StatusCode != http.StatusOK {
-		resp.Diagnostics.AddError("Token Error", fmt.Sprintf("unexpected status: %d", tokenResp.StatusCode))
-		return
-	}
-
-	var tokenBody struct {
-		AccessToken string `json:"access_token"`
-	}
-	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenBody); err != nil {
-		resp.Diagnostics.AddError("Token Decode Error", err.Error())
 		return
 	}
 
@@ -127,15 +80,21 @@ func (p *CloudRuCommunityProvider) Configure(ctx context.Context, req provider.C
 		dnsEndpoint = "https://dns.api.cloud.ru"
 	}
 
-	client := &CloudRuProviderClient{
-		HTTPClient:  httpClient,
-		Token:       tokenBody.AccessToken,
-		ProjectID:   data.ProjectID.ValueString(),
-		VpcEndpoint: vpcEndpoint,
-		DnsEndpoint: dnsEndpoint,
+	c, err := client.NewCloudRuHttpClient(
+		ctx,
+		data.AuthKeyID.ValueString(),
+		data.AuthSecret.ValueString(),
+		data.ProjectID.ValueString(),
+		vpcEndpoint,
+		dnsEndpoint,
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Authentication Error", err.Error())
+		return
 	}
 
-	resp.ResourceData = client
+	resp.ResourceData = c
+	resp.DataSourceData = c
 }
 
 func (p *CloudRuCommunityProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -146,7 +105,9 @@ func (p *CloudRuCommunityProvider) Resources(ctx context.Context) []func() resou
 }
 
 func (p *CloudRuCommunityProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewVpcsDataSource,
+	}
 }
 
 func New(version string) func() provider.Provider {

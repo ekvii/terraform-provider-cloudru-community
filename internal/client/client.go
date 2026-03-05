@@ -1,0 +1,275 @@
+// Package client provides a thin HTTP wrapper used by all provider components.
+//
+// It encapsulates:
+//   - Bearer-token authorization on every request
+//   - Transparent page-token pagination via [GetPaged]
+//   - Consistent error handling (transport errors, non-2xx status codes, API
+//     error fields in the JSON body, and JSON decode failures)
+package client
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/hashicorp/go-retryablehttp"
+)
+
+// CloudRuHttpClient is the shared HTTP client for all provider resources and
+// data sources. Create one via [NewCloudRuHttpClient] and store it in the
+// provider's configure response so every resource/datasource can retrieve it
+// through ProviderData.
+type CloudRuHttpClient struct {
+	httpClient *http.Client
+	token      string
+
+	// ProjectID is the default Cloud.ru project used when callers do not
+	// supply one explicitly.
+	ProjectID string
+
+	// VpcEndpoint is the base URL for the VPC API (e.g. "https://vpc.api.cloud.ru").
+	VpcEndpoint string
+
+	// DnsEndpoint is the base URL for the DNS API (e.g. "https://dns.api.cloud.ru").
+	DnsEndpoint string
+}
+
+// NewCloudRuHttpClient builds a fully initialised [CloudRuHttpClient].
+// It constructs an internal retryable HTTP client, fetches a bearer token via
+// the OAuth2 client_credentials grant, and stores all configuration so callers
+// never need to handle auth or endpoint details directly.
+func NewCloudRuHttpClient(ctx context.Context, keyID, secret, projectID, vpcEndpoint, dnsEndpoint string) (*CloudRuHttpClient, error) {
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = 3
+	retryClient.HTTPClient.Timeout = 3 * time.Second
+	retryClient.Logger = nil
+	httpClient := retryClient.StandardClient()
+
+	token, err := fetchToken(ctx, httpClient, keyID, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CloudRuHttpClient{
+		httpClient:  httpClient,
+		token:       token,
+		ProjectID:   projectID,
+		VpcEndpoint: vpcEndpoint,
+		DnsEndpoint: dnsEndpoint,
+	}, nil
+}
+
+// fetchToken obtains a short-lived bearer token from the Cloud.ru identity
+// endpoint using the OAuth2 client_credentials grant.
+func fetchToken(ctx context.Context, httpClient *http.Client, keyID, secret string) (string, error) {
+	form := url.Values{}
+	form.Set("grant_type", "client_credentials")
+	form.Set("client_id", keyID)
+	form.Set("client_secret", secret)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://id.cloud.ru/auth/system/openid/token",
+		strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		return "", fmt.Errorf("build token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("execute token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected token response status: %d", resp.StatusCode)
+	}
+
+	var body struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", fmt.Errorf("decode token response: %w", err)
+	}
+	return body.AccessToken, nil
+}
+
+// apiError is the common error envelope returned by Cloud.ru APIs.
+type apiError struct {
+	Error string `json:"error"`
+}
+
+// execute performs an HTTP request with the Authorization header set, asserts
+// HTTP 200, reads the full body, checks for an "error" field in the JSON
+// response, and — when dest is non-nil — decodes the body into dest.
+func (c *CloudRuHttpClient) execute(req *http.Request, dest interface{}) error {
+	req.Header.Set("Authorization", "Bearer "+c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Try to surface the API error message if present.
+		var apiErr apiError
+		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != "" {
+			return fmt.Errorf("HTTP %d: %s", resp.StatusCode, apiErr.Error)
+		}
+		return fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Even on HTTP 200 some APIs embed an error field.
+	var apiErr apiError
+	if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != "" {
+		return fmt.Errorf("API error: %s", apiErr.Error)
+	}
+
+	if dest != nil {
+		if err := json.Unmarshal(body, dest); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+	}
+	return nil
+}
+
+// GetJSON performs a GET request, asserts HTTP 200, checks for an API error
+// field, and JSON-decodes the response body into dest.
+func (c *CloudRuHttpClient) GetJSON(ctx context.Context, url string, dest interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	return c.execute(req, dest)
+}
+
+// PostJSON marshals body as JSON, performs a POST request, asserts HTTP 200,
+// checks for an API error field, and JSON-decodes the response into dest.
+// Pass nil for dest to discard the response body.
+func (c *CloudRuHttpClient) PostJSON(ctx context.Context, url string, body interface{}, dest interface{}) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return c.execute(req, dest)
+}
+
+// PutJSON marshals body as JSON, performs a PUT request, asserts HTTP 200,
+// checks for an API error field, and JSON-decodes the response into dest.
+// Pass nil for dest to discard the response body.
+func (c *CloudRuHttpClient) PutJSON(ctx context.Context, url string, body interface{}, dest interface{}) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return c.execute(req, dest)
+}
+
+// Delete performs a DELETE request, asserts HTTP 200, and checks for an API
+// error field in the response body.
+func (c *CloudRuHttpClient) Delete(ctx context.Context, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	return c.execute(req, nil)
+}
+
+// PagedResponse is the minimal interface a paginated list response must
+// satisfy so [GetPaged] can extract items and advance the cursor.
+//
+// T is the item type returned per page.
+type PagedResponse[T any] interface {
+	// Items returns the slice of items from this page.
+	Items() []T
+	// NextToken returns the opaque page token for the following page, or an
+	// empty string when this is the last page.
+	NextToken() string
+}
+
+// GetPaged fetches all pages from a paginated list endpoint and returns the
+// deduplicated items. The endpoint must accept an optional "pageToken" query
+// parameter appended to baseURL.
+//
+// newResp is a factory that returns a fresh, zeroed *R (where R implements
+// [PagedResponse][T]) for each page decode. idOf extracts a stable unique
+// string key from each item for deduplication.
+//
+// Example:
+//
+//	type vpcPage struct { ... }
+//	func (p *vpcPage) Items() []apiVpc      { return p.Vpcs }
+//	func (p *vpcPage) NextToken() string    { return p.NextPageToken }
+//
+//	vpcs, err := client.GetPaged(ctx, c, baseURL,
+//	    func() *vpcPage { return &vpcPage{} },
+//	    func(v apiVpc) string { return v.ID },
+//	)
+func GetPaged[T any, R PagedResponse[T]](
+	ctx context.Context,
+	c *CloudRuHttpClient,
+	baseURL string,
+	newResp func() R,
+	idOf func(T) string,
+) ([]T, error) {
+	var (
+		all    []T
+		seen   = make(map[string]struct{})
+		cursor = ""
+	)
+
+	for {
+		reqURL := baseURL
+		if cursor != "" {
+			reqURL += "&pageToken=" + cursor
+		}
+
+		page := newResp()
+		if err := c.GetJSON(ctx, reqURL, page); err != nil {
+			return nil, err
+		}
+
+		for _, item := range page.Items() {
+			id := idOf(item)
+			if _, dup := seen[id]; !dup {
+				seen[id] = struct{}{}
+				all = append(all, item)
+			}
+		}
+
+		next := page.NextToken()
+		if next == "" || next == cursor {
+			break
+		}
+		cursor = next
+	}
+
+	return all, nil
+}

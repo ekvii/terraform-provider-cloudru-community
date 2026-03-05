@@ -1,11 +1,8 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -13,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-cloudru-community/internal/client"
 )
 
 var _ resource.Resource = &DnsServerResource{}
@@ -23,7 +22,7 @@ func NewDnsServerResource() resource.Resource {
 }
 
 type DnsServerResource struct {
-	client *CloudRuProviderClient
+	client *client.CloudRuHttpClient
 }
 
 type DnsServerModel struct {
@@ -60,12 +59,17 @@ func (r *DnsServerResource) Configure(ctx context.Context, req resource.Configur
 	if req.ProviderData == nil {
 		return
 	}
-	client, ok := req.ProviderData.(*CloudRuProviderClient)
+
+	c, ok := req.ProviderData.(*client.CloudRuHttpClient)
 	if !ok {
-		resp.Diagnostics.AddError("Unexpected Configure Type", "Expected CloudRuProviderClient")
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *client.CloudRuHttpClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
 		return
 	}
-	r.client = client
+
+	r.client = c
 }
 
 func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -86,23 +90,15 @@ func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateReque
 		body["description"] = data.Description.ValueString()
 	}
 
-	payload, _ := json.Marshal(body)
-	url := r.client.DnsEndpoint + "/v1/dnsServers"
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	httpReq.Header.Set("Authorization", "Bearer "+r.client.Token)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	httpResp, err := r.client.HTTPClient.Do(httpReq)
-	if err != nil {
-		resp.Diagnostics.AddError("Create Error", err.Error())
-		return
-	}
-	defer httpResp.Body.Close()
-
 	var op struct {
 		Id string `json:"id"`
 	}
-	json.NewDecoder(httpResp.Body).Decode(&op)
+
+	url := r.client.DnsEndpoint + "/v1/dnsServers"
+	if err := r.client.PostJSON(ctx, url, body, &op); err != nil {
+		resp.Diagnostics.AddError("Create Error", err.Error())
+		return
+	}
 
 	data.Id = types.StringValue(op.Id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -116,20 +112,6 @@ func (r *DnsServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	httpReq.Header.Set("Authorization", "Bearer "+r.client.Token)
-
-	httpResp, err := r.client.HTTPClient.Do(httpReq)
-	if err != nil {
-		resp.Diagnostics.AddError("Read Error", err.Error())
-		return
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode == http.StatusNotFound {
-		resp.State.RemoveResource(ctx)
-		return
-	}
 
 	var server struct {
 		Id          string `json:"id"`
@@ -138,7 +120,16 @@ func (r *DnsServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 		IpAddress   string `json:"ipAddress"`
 		Description string `json:"description"`
 	}
-	json.NewDecoder(httpResp.Body).Decode(&server)
+
+	err := r.client.GetJSON(ctx, url, &server)
+	if err != nil {
+		if isNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Read Error", err.Error())
+		return
+	}
 
 	data.Name = types.StringValue(server.Name)
 	data.SubnetId = types.StringValue(server.SubnetId)
@@ -158,15 +149,9 @@ func (r *DnsServerResource) Update(ctx context.Context, req resource.UpdateReque
 	body := map[string]interface{}{
 		"name": data.Name.ValueString(),
 	}
-	payload, _ := json.Marshal(body)
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(payload))
-	httpReq.Header.Set("Authorization", "Bearer "+r.client.Token)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	_, err := r.client.HTTPClient.Do(httpReq)
-	if err != nil {
+	if err := r.client.PutJSON(ctx, url, body, nil); err != nil {
 		resp.Diagnostics.AddError("Update Error", err.Error())
 		return
 	}
@@ -182,11 +167,7 @@ func (r *DnsServerResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	httpReq.Header.Set("Authorization", "Bearer "+r.client.Token)
-
-	_, err := r.client.HTTPClient.Do(httpReq)
-	if err != nil {
+	if err := r.client.Delete(ctx, url); err != nil {
 		resp.Diagnostics.AddError("Delete Error", err.Error())
 		return
 	}
