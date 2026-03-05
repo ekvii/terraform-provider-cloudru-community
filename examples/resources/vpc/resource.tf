@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 resource "cloudru-community_vpc" "example" {
   name        = "example-vpc"
   description = "VPC created by Terraform"

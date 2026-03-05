@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 variable "dns_subnet_id" {
   type        = string
   description = "Subnet ID where DNS server will be created"

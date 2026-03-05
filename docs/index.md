@@ -20,8 +20,9 @@ provider "cloudru-community" {
   auth_secret = var.auth_secret
 
   # Optional overrides
-  # vpc_endpoint = "https://vpc.api.cloud.ru"
-  # dns_endpoint = "https://dns.api.cloud.ru"
+  # vpc_endpoint     = "https://vpc.api.cloud.ru"
+  # dns_endpoint     = "https://dns.api.cloud.ru"
+  # compute_endpoint = "https://compute.api.cloud.ru"
 }
 
 variable "project_id" {
@@ -52,5 +53,6 @@ variable "auth_secret" {
 
 ### Optional
 
+- `compute_endpoint` (String) Cloud.ru Compute API endpoint (hosts subnet, VM resources)
 - `dns_endpoint` (String) Cloud.ru DNS API endpoint
 - `vpc_endpoint` (String) Cloud.ru VPC API endpoint

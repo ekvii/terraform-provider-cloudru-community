@@ -1,24 +1,26 @@
 # Unofficial cloud.ru provider for Terraform
 
-This terraform cloud provider is complementary to the official [cloud.ru provider](https://registry.terraform.io/providers/cloudru/cloudru/latest) and is driven by the community. It provides additional resources and features that are not available in the official provider, allowing users to manage their cloud.ru infrastructure more effectively. When the resource is available in the official provider, it will be removed from this provider. Feature prioritization is based on user demand (via opened issues) and direct contribution.
+> **Disclaimer**: This provider is not officially supported by cloud.ru and is maintained by the community. Use it at your own risk and always review the code and documentation before using it in production environments.
+
+This Terraform provider is complementary to the official [cloud.ru provider](https://registry.terraform.io/providers/cloudru/cloudru/latest) and is community-driven. It provides additional resources and features not yet available in the official provider, allowing users to manage their cloud.ru infrastructure more effectively. Once a resource becomes available in the official provider, it will be removed from this one. Feature prioritization is based on user demand (via open issues) and direct contributions.
 
 ## Development
 
-The provider is built on top of the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) and scaffolded from the [Terraform Provider Scaffolding Framework repository](https://github.com/hashicorp/terraform-provider-scaffolding-framework).
-It uses the [cloud.ru API](https://cloud.ru/docs/api/) to interact with the cloud.ru services.
+The provider is built on top of the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework), using the [Terraform Provider Scaffolding Framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) as a template.
+It uses the [cloud.ru API](https://cloud.ru/docs/api/) to interact with cloud.ru services.
 
-See GNUmakefile for the project SDLC details and development routine automation.
+See `GNUmakefile` for SDLC details and development automation.
 
 ## Local testing
 
 1. Run `make install`
-2. Put `set_overrides` directive to the `~/.terraformrc`:
+2. Add a `dev_overrides` block to `~/.terraformrc`:
 
 ```
 provider_installation {
 
   dev_overrides {
-      "registry.terraform.io/ekvii/cloudru-community" = "<GOBIN:~/go/bin/>"
+    "registry.terraform.io/ekvii/cloudru-community" = "/your/GOBIN/path"
   }
 
   # For all other providers, install them directly from their origin provider
@@ -28,4 +30,14 @@ provider_installation {
 }
 ```
 
+3. Use the provider in your Terraform configuration (see the `examples` directory for more details):
 
+```hcl
+terraform {
+  required_providers {
+    cloudru-community = {
+      source = "registry.terraform.io/ekvii/cloudru-community"
+    }
+  }
+}
+```
