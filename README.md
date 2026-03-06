@@ -1,7 +1,7 @@
 # Unofficial cloud.ru provider for Terraform
 
 [![Tests](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml/badge.svg)](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml)
-![Version](https://img.shields.io/github/v/release/ekvii/terraform-provider-cloudru-community?label=latest%20release)
+![Version](https://img.shields.io/github/v/release/ekvii/terraform-provider-cloudru-community?label=Version)
 
 > **Disclaimer**: This provider is not officially supported by cloud.ru and is maintained by the community. Use it at your own risk and always review the code and documentation before using it in production environments.
 
