@@ -113,6 +113,7 @@ func (p *CloudRuCommunityProvider) Resources(ctx context.Context) []func() resou
 		NewCloudRuVpcResource,
 		NewDnsServerResource,
 		NewSubnetResource,
+		NewPlacementGroupResource,
 	}
 }
 
