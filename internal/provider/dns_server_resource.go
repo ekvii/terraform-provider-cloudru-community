@@ -90,9 +90,7 @@ func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateReque
 		body["description"] = data.Description.ValueString()
 	}
 
-	var op struct {
-		Id string `json:"id"`
-	}
+	var op client.Operation
 
 	url := r.client.DnsEndpoint + "/v1/dnsServers"
 	if err := r.client.PostJSON(ctx, url, body, &op); err != nil {
@@ -100,7 +98,14 @@ func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	data.Id = types.StringValue(op.Id)
+	pollUrl := fmt.Sprintf("%s/v1/operations/%s", r.client.DnsEndpoint, op.Id)
+	result, err := r.client.WaitForOperation(ctx, pollUrl)
+	if err != nil {
+		resp.Diagnostics.AddError("Operation Polling Error", err.Error())
+		return
+	}
+
+	data.Id = types.StringValue(result.ResourceId)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -151,8 +156,15 @@ func (r *DnsServerResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
-	if err := r.client.PutJSON(ctx, url, body, nil); err != nil {
+	var op client.Operation
+	if err := r.client.PutJSON(ctx, url, body, &op); err != nil {
 		resp.Diagnostics.AddError("Update Error", err.Error())
+		return
+	}
+
+	pollUrl := fmt.Sprintf("%s/v1/operations/%s", r.client.DnsEndpoint, op.Id)
+	if _, err := r.client.WaitForOperation(ctx, pollUrl); err != nil {
+		resp.Diagnostics.AddError("Operation Polling Error", err.Error())
 		return
 	}
 
@@ -167,8 +179,15 @@ func (r *DnsServerResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
-	if err := r.client.Delete(ctx, url); err != nil {
+	var op client.Operation
+	if err := r.client.DeleteJSON(ctx, url, &op); err != nil {
 		resp.Diagnostics.AddError("Delete Error", err.Error())
+		return
+	}
+
+	pollUrl := fmt.Sprintf("%s/v1/operations/%s", r.client.DnsEndpoint, op.Id)
+	if _, err := r.client.WaitForOperation(ctx, pollUrl); err != nil {
+		resp.Diagnostics.AddError("Operation Polling Error", err.Error())
 		return
 	}
 }

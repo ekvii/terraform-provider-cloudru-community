@@ -224,6 +224,18 @@ func (c *CloudRuHttpClient) Delete(ctx context.Context, url string) error {
 	return c.execute(req, http.StatusOK, nil)
 }
 
+// DeleteJSON performs a DELETE request, asserts HTTP 200, checks for an API
+// error field, and JSON-decodes the response body into dest.
+// Use this for endpoints that return a body (e.g. an async Operation) on deletion.
+// Pass nil for dest to discard the response body.
+func (c *CloudRuHttpClient) DeleteJSON(ctx context.Context, url string, dest interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	return c.execute(req, http.StatusOK, dest)
+}
+
 // DeleteNoContent performs a DELETE request and asserts HTTP 204 (no body).
 // Use this for endpoints that return 204 No Content on successful deletion.
 func (c *CloudRuHttpClient) DeleteNoContent(ctx context.Context, url string) error {
@@ -232,6 +244,37 @@ func (c *CloudRuHttpClient) DeleteNoContent(ctx context.Context, url string) err
 		return fmt.Errorf("build request: %w", err)
 	}
 	return c.execute(req, http.StatusNoContent, nil)
+}
+
+// Operation is the common async operation envelope returned by Cloud.ru APIs
+// for mutating requests (create, update, delete). Poll the operation URL until
+// Done is true, then inspect ResourceId to get the created/modified resource ID.
+type Operation struct {
+	Id         string `json:"id"`
+	Done       bool   `json:"done"`
+	ResourceId string `json:"resourceId"`
+}
+
+// WaitForOperation polls the given operationURL every 2 seconds until the
+// operation reports Done == true, then returns the final Operation value.
+// The context deadline is respected — if the context is cancelled or times out,
+// the function returns the context error immediately.
+func (c *CloudRuHttpClient) WaitForOperation(ctx context.Context, operationURL string) (*Operation, error) {
+	var op Operation
+	if err := c.GetJSON(ctx, operationURL, &op); err != nil {
+		return nil, err
+	}
+	for !op.Done {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+		if err := c.GetJSON(ctx, operationURL, &op); err != nil {
+			return nil, err
+		}
+	}
+	return &op, nil
 }
 
 // PagedResponse is the minimal interface a paginated list response must

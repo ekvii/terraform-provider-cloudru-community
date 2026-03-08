@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -90,11 +89,7 @@ func (r *CloudRuVpcResource) Create(ctx context.Context, req resource.CreateRequ
 		"description": data.Description.ValueString(),
 	}
 
-	var op struct {
-		Id         string `json:"id"`
-		Done       bool   `json:"done"`
-		ResourceId string `json:"resourceId"`
-	}
+	var op client.Operation
 
 	reqURL := r.client.VpcEndpoint + "/v1/vpcs"
 	if err := r.client.PostJSON(ctx, reqURL, body, &op); err != nil {
@@ -102,16 +97,14 @@ func (r *CloudRuVpcResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	for !op.Done {
-		time.Sleep(2 * time.Second)
-		pollURL := fmt.Sprintf("%s/v1/vpcs/operations/%s", r.client.VpcEndpoint, op.Id)
-		if err := r.client.GetJSON(ctx, pollURL, &op); err != nil {
-			resp.Diagnostics.AddError("Operation Poll Error", err.Error())
-			return
-		}
+	pollURL := fmt.Sprintf("%s/v1/vpcs/operations/%s", r.client.VpcEndpoint, op.Id)
+	result, err := r.client.WaitForOperation(ctx, pollURL)
+	if err != nil {
+		resp.Diagnostics.AddError("Operation Poll Error", err.Error())
+		return
 	}
 
-	data.Id = types.StringValue(op.ResourceId)
+	data.Id = types.StringValue(result.ResourceId)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -163,8 +156,15 @@ func (r *CloudRuVpcResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	putURL := fmt.Sprintf("%s/v1/vpcs/%s", r.client.VpcEndpoint, data.Id.ValueString())
-	if err := r.client.PutJSON(ctx, putURL, body, nil); err != nil {
+	var op client.Operation
+	if err := r.client.PutJSON(ctx, putURL, body, &op); err != nil {
 		resp.Diagnostics.AddError("Update Error", err.Error())
+		return
+	}
+
+	pollURL := fmt.Sprintf("%s/v1/vpcs/operations/%s", r.client.VpcEndpoint, op.Id)
+	if _, err := r.client.WaitForOperation(ctx, pollURL); err != nil {
+		resp.Diagnostics.AddError("Operation Poll Error", err.Error())
 		return
 	}
 
@@ -180,8 +180,15 @@ func (r *CloudRuVpcResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	delURL := fmt.Sprintf("%s/v1/vpcs/%s", r.client.VpcEndpoint, data.Id.ValueString())
-	if err := r.client.Delete(ctx, delURL); err != nil {
+	var op client.Operation
+	if err := r.client.DeleteJSON(ctx, delURL, &op); err != nil {
 		resp.Diagnostics.AddError("Delete Error", err.Error())
+		return
+	}
+
+	pollURL := fmt.Sprintf("%s/v1/vpcs/operations/%s", r.client.VpcEndpoint, op.Id)
+	if _, err := r.client.WaitForOperation(ctx, pollURL); err != nil {
+		resp.Diagnostics.AddError("Operation Poll Error", err.Error())
 		return
 	}
 }
