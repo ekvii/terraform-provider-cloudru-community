@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- `cloudru-community_placement_group` resource added
+
 ## 0.1.5
 
 - Bugfix: DNS Server's state after creation doesn't store the comuted ipAddress, which leads to the resource being updated on every apply. Now the state is properly updated with the computed ipAddress after creation.
