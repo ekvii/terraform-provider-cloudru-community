@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -368,6 +369,26 @@ func (r *SubnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// The Compute API creates subnets asynchronously. Poll GET until state is
+	// "created" or a terminal error state is reached.
+	getURL := fmt.Sprintf("%s/api/v1/subnets/%s", r.client.ComputeEndpoint, apiResp.ID)
+	for apiResp.State != "created" {
+		select {
+		case <-ctx.Done():
+			resp.Diagnostics.AddError("Create Subnet Timeout", ctx.Err().Error())
+			return
+		case <-time.After(2 * time.Second):
+		}
+		if err := r.client.GetJSON(ctx, getURL, &apiResp); err != nil {
+			resp.Diagnostics.AddError("Create Subnet Poll Error", err.Error())
+			return
+		}
+		if apiResp.State == "error_creating" || apiResp.State == "error" {
+			resp.Diagnostics.AddError("Create Subnet Error", fmt.Sprintf("subnet entered %s state", apiResp.State))
+			return
+		}
+	}
+
 	flattenSubnetResponse(&apiResp, &data)
 	data.ProjectID = types.StringValue(projectID)
 
@@ -545,6 +566,32 @@ func (r *SubnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		}
 		resp.Diagnostics.AddError("Delete Subnet Error", err.Error())
 		return
+	}
+
+	// The Compute API returns 204 immediately but deletes asynchronously.
+	// Poll GET until the subnet is gone (404) or enters error_deleting state.
+	getURL := fmt.Sprintf("%s/api/v1/subnets/%s", r.client.ComputeEndpoint, data.ID.ValueString())
+	for {
+		select {
+		case <-ctx.Done():
+			resp.Diagnostics.AddError("Delete Subnet Timeout", ctx.Err().Error())
+			return
+		case <-time.After(2 * time.Second):
+		}
+
+		var apiResp apiSubnetResponse
+		err := r.client.GetJSON(ctx, getURL, &apiResp)
+		if err != nil {
+			if client.IsNotFound(err) {
+				return
+			}
+			resp.Diagnostics.AddError("Delete Subnet Poll Error", err.Error())
+			return
+		}
+		if apiResp.State == "error_deleting" {
+			resp.Diagnostics.AddError("Delete Subnet Error", fmt.Sprintf("subnet entered error_deleting state"))
+			return
+		}
 	}
 }
 

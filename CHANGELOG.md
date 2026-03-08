@@ -1,8 +1,14 @@
-## 0.1.3 (Unreleased)
+# Changelog
+
+## 0.1.4
+
+- Stabilization of async operations on resources via REST API of cloud.ru
+
+## 0.1.3
 
 FEATURES:
+
 - cloudru-community provider
-- New provider attribute `compute_endpoint` for overriding the Compute API base URL
 - `cloudru-community_vpc` resource added
 - `cloudru-community_dns_server` resource added
 - `cloudru-community_subnet` resource added (managed via Compute API)

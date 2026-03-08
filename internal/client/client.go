@@ -246,17 +246,25 @@ func (c *CloudRuHttpClient) DeleteNoContent(ctx context.Context, url string) err
 	return c.execute(req, http.StatusNoContent, nil)
 }
 
+// operationError mirrors the error field embedded in an Operation (google.rpc.Status).
+type operationError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 // Operation is the common async operation envelope returned by Cloud.ru APIs
 // for mutating requests (create, update, delete). Poll the operation URL until
 // Done is true, then inspect ResourceId to get the created/modified resource ID.
 type Operation struct {
-	Id         string `json:"id"`
-	Done       bool   `json:"done"`
-	ResourceId string `json:"resourceId"`
+	Id         string          `json:"id"`
+	Done       bool            `json:"done"`
+	ResourceId string          `json:"resourceId"`
+	Error      *operationError `json:"error"`
 }
 
 // WaitForOperation polls the given operationURL every 2 seconds until the
 // operation reports Done == true, then returns the final Operation value.
+// If the completed operation carries a non-nil error field, an error is returned.
 // The context deadline is respected — if the context is cancelled or times out,
 // the function returns the context error immediately.
 func (c *CloudRuHttpClient) WaitForOperation(ctx context.Context, operationURL string) (*Operation, error) {
@@ -273,6 +281,9 @@ func (c *CloudRuHttpClient) WaitForOperation(ctx context.Context, operationURL s
 		if err := c.GetJSON(ctx, operationURL, &op); err != nil {
 			return nil, err
 		}
+	}
+	if op.Error != nil {
+		return nil, fmt.Errorf("operation %s failed (code %d): %s", op.Id, op.Error.Code, op.Error.Message)
 	}
 	return &op, nil
 }
