@@ -12,6 +12,7 @@ This Terraform provider is complementary to the official [cloud.ru provider](htt
 - `cloudru-community_vpc`: (resource) Manage VPCs in cloud.ru.
 - `cloudru-community_subnet`: (resource) Manage subnets in the custom VPCs.
 - `cloudru-community_dns_server`: (resource) Manage Evolution DNS servers in cloud.ru.
+- `cloudru-community_placement_group` (resource): Manage placement groups in cloud.ru.
 - `cloudru-community_vpcs` (data source): Retrieve a list of VPCs in cloud.ru.
 
 ## Usage
