@@ -589,7 +589,7 @@ func (r *SubnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return
 		}
 		if apiResp.State == "error_deleting" {
-			resp.Diagnostics.AddError("Delete Subnet Error", fmt.Sprintf("subnet entered error_deleting state"))
+			resp.Diagnostics.AddError("Delete Subnet Error", "subnet entered error_deleting state")
 			return
 		}
 	}
