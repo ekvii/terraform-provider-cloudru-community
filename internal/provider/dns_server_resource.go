@@ -33,6 +33,32 @@ type DnsServerModel struct {
 	Description types.String `tfsdk:"description"`
 }
 
+type apiDnsServer struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	SubnetId    string `json:"subnetId"`
+	IpAddress   string `json:"ipAddress"`
+	Description string `json:"description"`
+}
+
+// flattenDnsServer copies an API response into the Terraform state model.
+// Optional fields that the API returns as empty strings are stored as null so
+// that Terraform does not detect spurious drift.
+func flattenDnsServer(api *apiDnsServer, data *DnsServerModel) {
+	data.Name = types.StringValue(api.Name)
+	data.SubnetId = types.StringValue(api.SubnetId)
+	if api.IpAddress != "" {
+		data.IpAddress = types.StringValue(api.IpAddress)
+	} else {
+		data.IpAddress = types.StringNull()
+	}
+	if api.Description != "" {
+		data.Description = types.StringValue(api.Description)
+	} else {
+		data.Description = types.StringNull()
+	}
+}
+
 func (r *DnsServerResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_dns_server"
 }
@@ -49,8 +75,8 @@ func (r *DnsServerResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"name":        schema.StringAttribute{Required: true},
 			"subnet_id":   schema.StringAttribute{Required: true},
-			"ip_address":  schema.StringAttribute{Optional: true},
-			"description": schema.StringAttribute{Optional: true},
+			"ip_address":  schema.StringAttribute{Optional: true, Computed: true},
+			"description": schema.StringAttribute{Optional: true, Computed: true},
 		},
 	}
 }
@@ -83,10 +109,10 @@ func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateReque
 		"name":     data.Name.ValueString(),
 		"subnetId": data.SubnetId.ValueString(),
 	}
-	if !data.IpAddress.IsNull() {
+	if !data.IpAddress.IsNull() && !data.IpAddress.IsUnknown() {
 		body["ipAddress"] = data.IpAddress.ValueString()
 	}
-	if !data.Description.IsNull() {
+	if !data.Description.IsNull() && !data.Description.IsUnknown() {
 		body["description"] = data.Description.ValueString()
 	}
 
@@ -106,6 +132,17 @@ func (r *DnsServerResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	data.Id = types.StringValue(result.ResourceId)
+
+	// Read back the created resource so ip_address and description reflect
+	// what the API actually stored.
+	getURL := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, result.ResourceId)
+	var server apiDnsServer
+	if err := r.client.GetJSON(ctx, getURL, &server); err != nil {
+		resp.Diagnostics.AddError("Create Read-Back Error", err.Error())
+		return
+	}
+	flattenDnsServer(&server, &data)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -118,13 +155,7 @@ func (r *DnsServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	url := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
 
-	var server struct {
-		Id          string `json:"id"`
-		Name        string `json:"name"`
-		SubnetId    string `json:"subnetId"`
-		IpAddress   string `json:"ipAddress"`
-		Description string `json:"description"`
-	}
+	var server apiDnsServer
 
 	err := r.client.GetJSON(ctx, url, &server)
 	if err != nil {
@@ -136,10 +167,7 @@ func (r *DnsServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	data.Name = types.StringValue(server.Name)
-	data.SubnetId = types.StringValue(server.SubnetId)
-	data.IpAddress = types.StringValue(server.IpAddress)
-	data.Description = types.StringValue(server.Description)
+	flattenDnsServer(&server, &data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -167,6 +195,15 @@ func (r *DnsServerResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError("Operation Polling Error", err.Error())
 		return
 	}
+
+	// Read back the updated resource so all fields reflect what the API stored.
+	getURL := fmt.Sprintf("%s/v1/dnsServers/%s", r.client.DnsEndpoint, data.Id.ValueString())
+	var server apiDnsServer
+	if err := r.client.GetJSON(ctx, getURL, &server); err != nil {
+		resp.Diagnostics.AddError("Update Read-Back Error", err.Error())
+		return
+	}
+	flattenDnsServer(&server, &data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

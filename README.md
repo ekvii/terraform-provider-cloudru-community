@@ -14,6 +14,41 @@ This Terraform provider is complementary to the official [cloud.ru provider](htt
 - `cloudru-community_dns_server`: (resource) Manage Evolution DNS servers in cloud.ru.
 - `cloudru-community_vpcs` (data source): Retrieve a list of VPCs in cloud.ru.
 
+## Usage
+
+Recommented to use in pair with the official provider.
+
+```hcl
+terraform {
+  required_version = ">= 1.14.6"
+
+  required_providers {
+    cloudru = {
+      source  = "cloud.ru/cloudru/cloud"
+      version = "1.6.0"
+    }
+    cloudru-community = {
+      source = "registry.terraform.io/ekvii/cloudru-community"
+    }
+  }
+}
+
+provider "cloudru" {
+  project_id         = var.project_id
+  auth_key_id        = var.auth_key_id
+  auth_secret        = var.auth_secret
+  iam_endpoint       = "iam.api.cloud.ru:443"
+  evolution_endpoint = "https://compute.api.cloud.ru"
+}
+
+provider "cloudru-community" {
+  project_id  = var.project_id
+  auth_key_id = var.auth_key_id
+  auth_secret = var.auth_secret
+}
+
+```
+
 ## Development
 
 The provider is built on top of the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework), using the [Terraform Provider Scaffolding Framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) as a template.
