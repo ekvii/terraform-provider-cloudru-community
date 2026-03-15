@@ -17,7 +17,7 @@ This Terraform provider is complementary to the official [cloud.ru provider](htt
 | `cloudru-community_placement_group` | resource | Manage placement groups. | [resource.tf](examples/resources/placement_group/resource.tf) | [placement_group.md](docs/resources/placement_group.md) |
 | `cloudru-community_vm` | resource | Manage VMs (Compute API v1.1). Supports `direct_ip` and `regular` interfaces with an optional floating IP. | [direct_ip.tf](examples/resources/vm/direct_ip.tf) · [floating_ip.tf](examples/resources/vm/floating_ip.tf) | [vm.md](docs/resources/vm.md) |
 | `cloudru-community_free_tier_vm` | resource | Manage a free-tier VM. The platform selects the flavor and boot disk automatically. One per organisation. | [resource.tf](examples/resources/free_tier_vm/resource.tf) | [free_tier_vm.md](docs/resources/free_tier_vm.md) |
-| `cloudru-community_vpcs` | data source | Retrieve a list of VPCs. | — | [vpcs.md](docs/data-sources/vpcs.md) |
+| `cloudru-community_vpcs` | data source | Retrieve a list of VPCs. | [data-source.tf](examples/data_sources/vpc/data-source.tf) | [vpcs.md](docs/data-sources/vpcs.md) |
 
 ## Usage
 
