@@ -1,4 +1,4 @@
-# Unofficial cloud.ru provider for Terraform driven by the community
+# Community-driven cloud.ru Terraform provider
 
 [![Tests](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml/badge.svg)](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml)
 ![Version](https://img.shields.io/github/v/release/ekvii/terraform-provider-cloudru-community?label=Version)
