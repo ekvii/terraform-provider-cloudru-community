@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+- `cloudru-community_vm` resource added with support of direct_ip
+- `cloudru-community_free_tier_vm` resource added
+
 ## 0.2.0
 
 - `cloudru-community_placement_group` resource added
