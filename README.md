@@ -1,4 +1,4 @@
-# Unofficial cloud.ru provider for Terraform
+# Unofficial cloud.ru provider for Terraform driven by the community
 
 [![Tests](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml/badge.svg)](https://github.com/ekvii/terraform-provider-cloudru-community/actions/workflows/test.yml)
 ![Version](https://img.shields.io/github/v/release/ekvii/terraform-provider-cloudru-community?label=Version)
@@ -9,11 +9,15 @@ This Terraform provider is complementary to the official [cloud.ru provider](htt
 
 ## Supported entities
 
-- `cloudru-community_vpc`: (resource) Manage VPCs in cloud.ru.
-- `cloudru-community_subnet`: (resource) Manage subnets in the custom VPCs.
-- `cloudru-community_dns_server`: (resource) Manage Evolution DNS servers in cloud.ru.
-- `cloudru-community_placement_group` (resource): Manage placement groups in cloud.ru.
-- `cloudru-community_vpcs` (data source): Retrieve a list of VPCs in cloud.ru.
+| Resource | Kind | Description | Example | Docs |
+|---|---|---|---|---|
+| `cloudru-community_vpc` | resource | Manage VPCs. | [resource.tf](examples/resources/vpc/resource.tf) | [vpc.md](docs/resources/vpc.md) |
+| `cloudru-community_subnet` | resource | Manage subnets in custom VPCs. | [resource.tf](examples/resources/subnet/resource.tf) | [subnet.md](docs/resources/subnet.md) |
+| `cloudru-community_dns_server` | resource | Manage Evolution DNS servers. | [resource.tf](examples/resources/dns_server/resource.tf) | [dns_server.md](docs/resources/dns_server.md) |
+| `cloudru-community_placement_group` | resource | Manage placement groups. | [resource.tf](examples/resources/placement_group/resource.tf) | [placement_group.md](docs/resources/placement_group.md) |
+| `cloudru-community_vm` | resource | Manage VMs (Compute API v1.1). Supports `direct_ip` and `regular` interfaces with an optional floating IP. | [direct_ip.tf](examples/resources/vm/direct_ip.tf) · [floating_ip.tf](examples/resources/vm/floating_ip.tf) | [vm.md](docs/resources/vm.md) |
+| `cloudru-community_free_tier_vm` | resource | Manage a free-tier VM. The platform selects the flavor and boot disk automatically. One per organisation. | [resource.tf](examples/resources/free_tier_vm/resource.tf) | [free_tier_vm.md](docs/resources/free_tier_vm.md) |
+| `cloudru-community_vpcs` | data source | Retrieve a list of VPCs. | — | [vpcs.md](docs/data-sources/vpcs.md) |
 
 ## Usage
 

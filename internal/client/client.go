@@ -246,6 +246,22 @@ func (c *CloudRuHttpClient) DeleteNoContent(ctx context.Context, url string) err
 	return c.execute(req, http.StatusNoContent, nil)
 }
 
+// DeleteWithBodyNoContent marshals body as JSON, performs a DELETE request,
+// and asserts HTTP 204 (no content). Use this for the rare DELETE endpoints
+// that accept a JSON body but return no content (e.g. DELETE /api/v1/vms/{id}).
+func (c *CloudRuHttpClient) DeleteWithBodyNoContent(ctx context.Context, url string, body interface{}) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal delete body: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return c.execute(req, http.StatusNoContent, nil)
+}
+
 // operationError mirrors the error field embedded in an Operation (google.rpc.Status).
 type operationError struct {
 	Code    int    `json:"code"`
