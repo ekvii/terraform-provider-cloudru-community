@@ -5,7 +5,7 @@
 
 > **Disclaimer**: This provider is not officially supported by cloud.ru and is maintained by the community. Use it at your own risk and always review the code and documentation before using it in production environments.
 
-This Terraform provider is complementary to the official [cloud.ru provider](https://github.com/cloud-ru/evo-terraform) and is community-driven. It provides additional resources and features not yet available in the official provider, allowing users to manage their cloud.ru infrastructure more effectively. Once a resource becomes available in the official provider, it will be removed from this one. Feature prioritization is based on user demand (via open issues) and direct contributions.
+This Terraform provider is complementary to the official [cloud.ru Evolution provider](https://github.com/cloud-ru/evo-terraform) and is community-driven. It provides additional resources and features not yet available in the official provider, allowing users to manage their cloud.ru infrastructure more effectively. Once a resource becomes available in the official provider, it will be removed from this one. Feature prioritization is based on user demand (via open issues) and direct contributions.
 
 ## Supported entities
 
